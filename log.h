@@ -7,6 +7,8 @@
 #include "list"
 #include "sstream"
 #include "fstream"
+#include "iostream"
+#include "vector"
 #ifndef WEBFRAME_LOG_H
 #define WEBFRAME_LOG_H
 
@@ -43,10 +45,44 @@ namespace glweb{
     };
     //日志格式器
     class LogFormatter{
+    /**
+  * @brief 构造函数
+  * @param[in] pattern 格式模板
+  * @details
+  *  %m 消息
+  *  %p 日志级别
+  *  %r 累计毫秒数
+  *  %c 日志名称
+  *  %t 线程id
+  *  %n 换行
+  *  %d 时间
+  *  %f 文件名
+  *  %l 行号
+  *  %T 制表符
+  *  %F 协程id
+  *  %N 线程名称
+  *
+  *  默认格式 "%d{%Y-%m-%d %H:%M:%S}%T%t%T%N%T%F%T[%p]%T[%c]%T%f:%l%T%m%n"
+  */
     public:
         typedef std::shared_ptr<LogFormatter> ptr;
-        std::string format(LogEvent::ptr event);
+        LogFormatter(const std::string& pattern);
+        //时间+消息+线程号等等。。
+        std::string format(std::ostream& os,LogEvent::ptr event);
+        void init();
+    public:
+        class FormatterItem{
+        public:
+            typedef std::shared_ptr<FormatterItem> ptr;
+            virtual ~FormatterItem();
+            virtual void format(std::ostream& os,LogEvent::ptr logEvent) = 0;
+
+        };
     private:
+        //m_pattern 是日志的格式，可以自己设置
+        std::string m_pattern;
+        std::vector<FormatterItem::ptr> m_items;
+
 
     };
     //日志输出地,由于其子类需要用到日志级别，因此需要设置为protected
