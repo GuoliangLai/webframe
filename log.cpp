@@ -60,9 +60,9 @@ namespace glweb {
         log(LogLevel::FATAL, event);
     }
 
-    void StdoutLogAppender::log(LogLevel::Level level, LogEvent::ptr event) {
+    void StdoutLogAppender::log(std::shared_ptr<Logger> logger,LogLevel::Level level,LogEvent::ptr event) {
         if (level >= m_level) {
-            std::cout << m_formatter->format(std::cout,event);
+            std::cout << m_formatter->format(logger, level, std::cout, event);
         }
 
     }
@@ -72,9 +72,9 @@ namespace glweb {
 
     }
 
-    void FileLogAppender::log(LogLevel::Level level, LogEvent::ptr event) {
+    void FileLogAppender::log(std::shared_ptr<Logger> logger,LogLevel::Level level,LogEvent::ptr event) {
         if (level >= m_level) {
-            m_filestream << m_formatter->format(std::cout,event);
+            m_filestream << m_formatter->format(logger, level, std::cout, event);
         }
 
     }
@@ -92,10 +92,10 @@ namespace glweb {
     LogFormatter::LogFormatter(const std::string &pattern)
             : m_pattern(pattern) {}
 
-    std::string LogFormatter::format(std::ostream &os, LogEvent::ptr event) {
+    std::string LogFormatter::format(std::shared_ptr<Logger> logger,LogLevel::Level level, std::ostream &os, LogEvent::ptr logEvent) {
         std::stringstream ss;
         for (auto &i : m_items) {
-            i->format(ss, event);
+            i->format(level, logger, ss, logEvent);
         }
         return ss.str();
 
@@ -150,8 +150,8 @@ namespace glweb {
             std::string fmt;
             //解析{%Y-%m-%d %H:%M:%S}内的内容
             while (n < m_pattern.size()) {
-                if(!fmt_status && (!isalpha(m_pattern[n]) && m_pattern[n] != '{'
-                                   && m_pattern[n] != '}')) {
+                if (!fmt_status && (!isalpha(m_pattern[n]) && m_pattern[n] != '{'
+                                    && m_pattern[n] != '}')) {
                     str = m_pattern.substr(i + 1, n - i - 1);
                     break;
                 }
@@ -161,7 +161,9 @@ namespace glweb {
                 }
                 if (fmt_status == 0) {
                     if (m_pattern[n] == '{') {
-                        str = m_pattern.substr(i + 1, n - i + 1);
+                        //substr(a,b)参数a表示从a开始，参数b表示从a开始数多少位，b可以是负数，负数无论是多少，都是从a开始到结尾,若b为0则会返回空。
+                        //substr(a)表示从a开始到结尾
+                        str = m_pattern.substr(i + 1, n - i - 1);
                         fmt_status = 1;
                         fmt_begin = n;
                         ++n;
@@ -170,6 +172,7 @@ namespace glweb {
                 }
                 if (fmt_status == 1) {
                     if (m_pattern[n] == '}') {
+                        //fmt_begin = n,n = n+1 ;
                         str = m_pattern.substr(fmt_begin + 1, n - fmt_begin - 1);
                         fmt_status = 0;
                         ++n;
@@ -177,19 +180,116 @@ namespace glweb {
                     }
                 }
                 ++n;
-                if (n == m_pattern.size()){
-                    if (str.empty()){
-                        str = m_pattern.substr(i+1);
+                if (n == m_pattern.size()) {
+                    if (str.empty()) {
+                        str = m_pattern.substr(i + 1);
                     }
 
                 }
             }//while结束
+            if (fmt_status == 0) {
+                if (!nstr.empty()) {
+                    //string()返回一个空字符串
+                    vec.push_back(std::make_tuple(nstr, std::string(), 0));
+                    nstr.clear();
+                }
+                vec.push_back(std::make_tuple(str, fmt, 1));
+                i = n - 1;
+            } else if (fmt_status == 1) {
+                std::cout << "pattern error at:" << m_pattern << " - " << m_pattern.substr(i) << std::endl;
+                vec.push_back(std::make_tuple("<<pattern error>>", fmt, 0));
+            }
 
 
+        }
+        if (!nstr.empty()) {
+            vec.push_back(std::make_tuple(nstr, "", 0));
         }
 
 
     }
+
+    const char *LogLevel::Tostring(LogLevel::Level level) {
+        switch (level) {
+            //#define的巧妙用法，define有三个特殊符号：#，##，#@，其中#表示给变量加上双引号，比如#123就变成了“123”，
+            //##表示将两者链接，可以是数字也可以是字符串，比如123##456输出123456，或者“abc“##”123“输出”abc123“，
+            // #@表示加上单引号，变为字符型，注意字符型只能是一个，#@a-->‘a’，如果两个以上字符会报错，
+            // 在实际中，我们可以用以上方式，很快的将int形转为字符或字符串，而以下代码中有\来进行跨行定义表示前后来两个是分开的，实际上就是：
+            //#define XX(name)  case LogLevel::name:  return #name;  break;
+            // undef表示取消定义
+
+#define XX(name) \
+    case LogLevel::name: \
+        return #name; \
+        break;
+
+            XX(DEBUG);
+            XX(INFO);
+            XX(WARN);
+            XX(ERROR);
+            XX(FATAL);
+#undef XX
+            default:
+                return "UNKNOW";
+        }
+        return "UNKNOW";
+    }
+
+    class MessageFormatItem : public LogFormatter::FormatterItem {
+    public:
+        void format(LogLevel::Level level, std::shared_ptr<Logger> logger,std::ostream &os, LogEvent::ptr logEvent) override {
+            os << logEvent->getContent();
+
+        }
+
+    };
+class LevelFormatItem : public LogFormatter::FormatterItem {
+public:
+    void format(LogLevel::Level level, std::shared_ptr<Logger> logger,std::ostream &os, LogEvent::ptr logEvent) override {
+        os << LogLevel::Tostring(level);
+
+    }
+};
+    class ElapseFormatItem : public LogFormatter::FormatterItem {
+    public:
+        void format(LogLevel::Level level, std::shared_ptr<Logger> logger,std::ostream &os, LogEvent::ptr logEvent) override {
+            os << logEvent->getElapse();
+
+        }
+
+    };
+    class ThreadIdFormatItem : public LogFormatter::FormatterItem {
+    public:
+        void format(LogLevel::Level level, std::shared_ptr<Logger> logger,std::ostream &os, LogEvent::ptr logEvent) override {
+            os << logEvent->getThreadId();
+
+        }
+
+    };
+    class FiberFormatItem : public LogFormatter::FormatterItem {
+    public:
+        void format(LogLevel::Level level, std::shared_ptr<Logger> logger,std::ostream &os, LogEvent::ptr logEvent) override {
+            os << logEvent->getFiberId();
+
+        }
+
+    };
+    class DataTimeFormatItem : public LogFormatter::FormatterItem {
+    public:
+        //给默认量需要前加const
+        DataTimeFormatItem(const std::string& format = "%Y:%m:%d %H:%M:%S")
+        :m_format(format){
+
+        }
+        void format(LogLevel::Level level, std::shared_ptr<Logger> logger,std::ostream &os, LogEvent::ptr logEvent) override {
+            os << logEvent->getElapse();
+
+        }
+
+    private:
+        std::string m_format;
+
+    };
 }
 
 

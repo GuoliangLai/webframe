@@ -14,11 +14,20 @@
 
 
 namespace glweb{
+    //由于类顺序不同，可能后面的类用到了前面的类，因此需要前置声明
+    class Logger;
     //日志时间
     class LogEvent{
     public:
         typedef std::shared_ptr<LogEvent> ptr;
         LogEvent() ;
+        const char* getFile() const {return m_file;}
+        int32_t getLine() const {return m_line;}
+        uint32_t getElapse() const {return m_elapse;}
+        uint32_t getThreadId() const {return m_threadId;}
+        uint32_t getFiberId() const {return m_fiberId;}
+        uint64_t getTime() const {return m_time;}
+        std::string getContent() const {return m_content;}
     private:
         //定义一个指向字符常量的指针,无法修改mfile来修改内容，常用于文件名设置
         const char* m_file = nullptr;
@@ -40,11 +49,12 @@ namespace glweb{
             ERROR = 4,
             FATAL = 5
         };
-    private:
+        static const char* Tostring(LogLevel::Level level);
+
 
     };
     //日志格式器
-    class LogFormatter{
+
     /**
   * @brief 构造函数
   * @param[in] pattern 格式模板
@@ -64,18 +74,19 @@ namespace glweb{
   *
   *  默认格式 "%d{%Y-%m-%d %H:%M:%S}%T%t%T%N%T%F%T[%p]%T[%c]%T%f:%l%T%m%n"
   */
+    class LogFormatter{
     public:
         typedef std::shared_ptr<LogFormatter> ptr;
         LogFormatter(const std::string& pattern);
         //时间+消息+线程号等等。。
-        std::string format(std::ostream& os,LogEvent::ptr event);
+        std::string format(std::shared_ptr<Logger> logger,LogLevel::Level level,std::ostream& os,LogEvent::ptr logEvent);
         void init();
     public:
         class FormatterItem{
         public:
             typedef std::shared_ptr<FormatterItem> ptr;
             virtual ~FormatterItem();
-            virtual void format(std::ostream& os,LogEvent::ptr logEvent) = 0;
+            virtual void format(LogLevel::Level level,std::shared_ptr<Logger> logger,std::ostream& os,LogEvent::ptr logEvent) = 0;
 
         };
     private:
@@ -87,12 +98,13 @@ namespace glweb{
     };
     //日志输出地,由于其子类需要用到日志级别，因此需要设置为protected
     class LogAppender{
+//        friend Logger;
     public:
         typedef std::shared_ptr<LogAppender> ptr;
         //子类必须重载log，并且需要重新声明。一个类函数的调用并不是在编译时刻被确定的，而是在运行时刻被确定的。由于编写代码的时候并不能确定被调用的是基类的函数还是哪个派生类的函数，所以被成为"虚"函数。
         // 虚函数只能借助于指针或者引用来达到多态的效果。纯虚函数是在基类中声明的虚函数，它在基类中没有定义，但要求任何派生类都要定义自己的实现方法。在基类中实现纯虚函数的方法是在函数原型后加 =0:
         virtual ~LogAppender() {};
-        virtual void log(LogLevel::Level level,LogEvent::ptr event) = 0;
+        virtual void log(std::shared_ptr<Logger> logger,LogLevel::Level level,LogEvent::ptr event) = 0;
         void setFormatter(LogFormatter::ptr formatter) { m_formatter=formatter;}
         LogFormatter::ptr getFormatter()const { return m_formatter;}
     protected:
@@ -118,6 +130,7 @@ namespace glweb{
         void setLever(LogLevel::Level level) {m_level=level;}
         void addAppender(LogAppender::ptr appender);
         void delAppender(LogAppender::ptr appender);
+        std::string getName() const {return m_name;}
 
     private:
         std::string m_name;
@@ -129,7 +142,7 @@ namespace glweb{
     class StdoutLogAppender : public LogAppender{
     public:
         typedef std::shared_ptr<StdoutLogAppender> ptr;
-        void log(LogLevel::Level level,LogEvent::ptr event) override;
+        void log(std::shared_ptr<Logger> logger,LogLevel::Level level,LogEvent::ptr event) override;
 
     };
     //输出到文件
@@ -137,7 +150,7 @@ namespace glweb{
     public:
         typedef std::shared_ptr<FileLogAppender> ptr;
         FileLogAppender(const std::string& filename);
-        void log(LogLevel::Level level,LogEvent::ptr event) override;
+        void log(std::shared_ptr<Logger> logger,LogLevel::Level level,LogEvent::ptr event) override;
         bool reopen();
     private:
         std::string m_filename;
