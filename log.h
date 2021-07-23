@@ -28,6 +28,7 @@ namespace glweb{
         uint32_t getFiberId() const {return m_fiberId;}
         uint64_t getTime() const {return m_time;}
         std::string getContent() const {return m_content;}
+        std::shared_ptr<Logger> getLogger() const {return m_logger;}
     private:
         //定义一个指向字符常量的指针,无法修改mfile来修改内容，常用于文件名设置
         const char* m_file = nullptr;
@@ -37,6 +38,7 @@ namespace glweb{
         uint32_t m_fiberId = 0;        //协程Id
         uint64_t m_time = 0;           //时间戳
         std::string m_content;         //内容
+        std::shared_ptr<Logger> m_logger;
 
     };
     //日志级别
@@ -85,7 +87,7 @@ namespace glweb{
         class FormatterItem{
         public:
             typedef std::shared_ptr<FormatterItem> ptr;
-            virtual ~FormatterItem();
+            virtual ~FormatterItem() {}
             virtual void format(LogLevel::Level level,std::shared_ptr<Logger> logger,std::ostream& os,LogEvent::ptr logEvent) = 0;
 
         };
@@ -113,7 +115,7 @@ namespace glweb{
     };
 
     //日志器
-    class Logger{
+    class Logger : public std::enable_shared_from_this<Logger>{
     public:
         typedef std::shared_ptr<Logger> ptr;
         //默认用户名为root
