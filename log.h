@@ -20,15 +20,17 @@ namespace glweb{
     class LogEvent{
     public:
         typedef std::shared_ptr<LogEvent> ptr;
-        LogEvent() ;
+        LogEvent(const char* file, int32_t line, uint32_t elapse,
+                 uint32_t threadId, uint32_t fiberId, uint64_t time) ;
         const char* getFile() const {return m_file;}
         int32_t getLine() const {return m_line;}
         uint32_t getElapse() const {return m_elapse;}
         uint32_t getThreadId() const {return m_threadId;}
         uint32_t getFiberId() const {return m_fiberId;}
         uint64_t getTime() const {return m_time;}
-        std::string getContent() const {return m_content;}
+        std::string getContent() const {return m_content.str();}
         std::shared_ptr<Logger> getLogger() const {return m_logger;}
+        std::stringstream& getSS() {return m_content;}
     private:
         //定义一个指向字符常量的指针,无法修改mfile来修改内容，常用于文件名设置
         const char* m_file = nullptr;
@@ -37,7 +39,7 @@ namespace glweb{
         uint32_t m_threadId = 0;       //线程id
         uint32_t m_fiberId = 0;        //协程Id
         uint64_t m_time = 0;           //时间戳
-        std::string m_content;         //内容
+        std::stringstream m_content;         //内容
         std::shared_ptr<Logger> m_logger;
 
     };
@@ -110,7 +112,8 @@ namespace glweb{
         void setFormatter(LogFormatter::ptr formatter) { m_formatter=formatter;}
         LogFormatter::ptr getFormatter()const { return m_formatter;}
     protected:
-        LogLevel::Level m_level;
+        //注意level的初始化
+        LogLevel::Level m_level = LogLevel::DEBUG;
         LogFormatter::ptr m_formatter;
     };
 
@@ -138,6 +141,7 @@ namespace glweb{
         std::string m_name;
         LogLevel::Level m_level;
         std::list<LogAppender::ptr> m_appenders;
+        LogFormatter::ptr m_formatter;
 
     };
     //输出到控制台的appender

@@ -7,11 +7,26 @@
 namespace glweb {
     //构造函数后面加冒号，就是初始化列表，即-用括号内的成员变量来初始化m_name的值
     Logger::Logger(const std::string &name)
-            : m_name(name) {
+            : m_name(name)
+            ,m_level(LogLevel::DEBUG) {
+        //reset是智能指针的成员函数，p.reset(q)，会令智能指针p中存放指针q，即p指向q的空间，而且会释放原来的空间。（默认是delete）
+        m_formatter.reset(new LogFormatter("%d-%T%t%T%T%F%T[%p]%T[%c]%T%f:%l%T%m%n"));
+    }
+    LogEvent::LogEvent(const char* file, int32_t line, uint32_t elapse,
+             uint32_t threadId, uint32_t fiberId, uint64_t time)
+             :m_file(file)
+             ,m_line(line)
+             ,m_elapse(elapse)
+             ,m_threadId(threadId)
+             ,m_fiberId(fiberId)
+             ,m_time(time) {
 
     }
-
     void Logger::addAppender(LogAppender::ptr appender) {
+        //如果没有指定格式就使用默认格式
+        if (!appender->getFormatter()){
+            appender->setFormatter(m_formatter);
+        }
         m_appenders.push_back(appender);
 
     }
@@ -65,6 +80,7 @@ namespace glweb {
     void StdoutLogAppender::log(std::shared_ptr<Logger> logger, LogLevel::Level level, LogEvent::ptr event) {
         if (level >= m_level) {
             std::cout << m_formatter->format(logger, level, std::cout, event);
+
         }
 
     }
@@ -92,7 +108,9 @@ namespace glweb {
     }
 
     LogFormatter::LogFormatter(const std::string &pattern)
-            : m_pattern(pattern) {}
+            : m_pattern(pattern) {
+        init();
+    }
 
     std::string LogFormatter::format(std::shared_ptr<Logger> logger, LogLevel::Level level, std::ostream &os,
                                      LogEvent::ptr logEvent) {
@@ -285,7 +303,7 @@ namespace glweb {
     void LogFormatter::init() {
         std::vector<std::tuple<std::string, std::string, int> > vec;
         std::string nstr;
-        for (size_t i = 0; i < m_pattern.size(); i) {
+        for (size_t i = 0; i < m_pattern.size(); ++i) {
             //首先判断是不是百分号，如果不是百分号就直接记录下来
             if (m_pattern[i] != '%') {
                 //在nstr结尾加入m_pattern[i]字符
@@ -364,7 +382,7 @@ namespace glweb {
         }
         //这是一个function的泛型应用,利用map查找应该调用的函数
         static std::map<std::string,std::function<FormatterItem::ptr(const std::string& str)> > s_fmt_items = {
-                //[](const std::string& fmt){return FormatterItem::ptr(new c(fmt));是lambda表达式，
+                //[](const std::string& fmt){return FormatterItem::ptr(new c(fmt));是lambda表达式，"%d{%Y-%m-%d %H:%M:%S}%T%t%T%N%T%F%T[%p]%T[%c]%T%f:%l%T%m%n
 #define XX(str, c) \
         {#str, [](const std::string& fmt){return FormatterItem::ptr(new c(fmt));}}
 
